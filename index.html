@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fa">
+	<head>
+		<meta charset="UTF-8" />
+		<title>انتخاب تاریخ</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<link rel="stylesheet" href="/fonts/remixicon.css">
+		<link rel="stylesheet" href="/css/main.css" />
+	</head>
+	<body>
+	<div class="container">
+  <div class="button-container">
+    <button class="showCalendar" data-id="1">انتخاب تاریخ شروع</button>
+    <span id="displayDate1"></span>
+    <div class="calendar" id="calendar1"></div>
+  </div>
+
+  <div class="button-container">
+    <button class="showCalendar btn--2" data-id="2">انتخاب تاریخ پایان</button>
+    <span id="displayDate2"></span>
+    <div class="calendar" id="calendar2"></div>
+  </div>
+
+  <div class="button-container">
+    <button id="showResultBtn" class="show-result-btn">نمایش تاریخ‌ها</button>
+    <button id="removeselectdata" class="show-result-btn">پاک کردن تاریخ</button>
+  </div>
+
+  <div class="result-box" id="resultBox">
+    <p id="date1Text"></p>
+    <p id="date2Text"></p>
+    <button class="ok-btn" id="send">تایید</button>
+    <button class="clear-btn" id="refreshBtn">حذف همه</button>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/persian-date/dist/persian-date.min.js"></script>
+		<script src="./js/script.js"></script>
+	</body>
+</html>
