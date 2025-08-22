@@ -1,215 +1,285 @@
-let selectedDates = {1: null, 2: null};
+// Calendar using jalaali-js — parity with persianDate behavior
+(function () {
+  const weekDays = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
+  const monthNames = [
+    'فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور',
+    'مهر','آبان','آذر','دی','بهمن','اسفند'
+  ];
 
-function initCalendar(buttonId) {
-  const calendarDiv = document.getElementById("calendar" + buttonId);
-  // calendarDiv.innerHTML = '';
-  calendarDiv.style.display = 'block';
+  const state = {
+    1: { view: new Date(), selected: null }, // start
+    2: { view: new Date(), selected: null }  // end
+  };
 
-function handleClickOutside(event) {
-  const isInsideCalendar = calendarDiv.contains(event.target);
-  const isMonthPopup = event.target.closest('.month-popup');
-  const isYearPopup = event.target.closest('.year-popup');
-  const isCalendarButton = event.target.classList.contains('showCalendar');
+  const calEls = {
+    1: document.getElementById('calendar1'),
+    2: document.getElementById('calendar2')
+  };
+  const displayEls = {
+    1: document.getElementById('displayDate1'),
+    2: document.getElementById('displayDate2')
+  };
 
-  if (!isInsideCalendar && !isMonthPopup && !isYearPopup && !isCalendarButton) {
-    calendarDiv.innerHTML = '';
-    calendarDiv.style.display = 'none';
-    document.removeEventListener('click', handleClickOutside);
+  // ---- Date utils (Gregorian <-> Jalaali) ----
+  function toJ(date) {
+    const j = jalaali.toJalaali(date);
+    return { y: j.jy, m: j.jm, d: j.jd };
   }
-}
+  function fromJ(y, m, d) {
+    const g = jalaali.toGregorian(y, m, d);
+    return new Date(g.gy, g.gm - 1, g.gd);
+  }
+  function formatJ(date) {
+    if (!date) return '';
+    const j = toJ(date);
+    return `${j.y}/${String(j.m).padStart(2,'0')}/${String(j.d).padStart(2,'0')}`;
+  }
+  function sameJ(a, b) {
+    if (!a || !b) return false;
+    const ja = toJ(a), jb = toJ(b);
+    return ja.y === jb.y && ja.m === jb.m && ja.d === jb.d;
+  }
 
-
-
-  let currentDate = new persianDate();
-  let today = new persianDate();
-
-  function renderCalendar() {
-    calendarDiv.innerHTML = '';
-    const year = currentDate.year();
-    const month = currentDate.month();
-    const start = new persianDate([year, month, 1]);
-    const end = new persianDate([year, month + 1, 1]).subtract('days', 1);
-    const startDay = start.day();
-    const daysInMonth = end.date();
-
-    const closeheader =document.createElement('div')
-    closeheader.classList.add('calendar-close-header')
-    const closeheaderbtn=document.createElement('button')
-    if(buttonId==1){
-      closeheaderbtn.classList.add('calendar-close-header-btn1')
-    }else{
-      closeheaderbtn.classList.add('calendar-close-header-btn2')
+  // ---- Popups (month/year) ----
+  function removePopups(id) {
+    calEls[id].querySelectorAll('.month-popup, .year-popup').forEach(el => el.remove());
+  }
+  function showMonthPopup(id) {
+    removePopups(id);
+    const s = state[id];
+    const j = toJ(s.view);
+    const wrap = document.createElement('div');
+    wrap.className = 'month-popup';
+    monthNames.forEach((name, idx) => {
+      const div = document.createElement('div');
+      div.textContent = name;
+      div.addEventListener('click', (e) => {
+        e.stopPropagation();
+        s.view = fromJ(j.y, idx + 1, 1);
+        removePopups(id);
+        renderCalendar(id);
+      });
+      wrap.appendChild(div);
+    });
+    calEls[id].appendChild(wrap);
+  }
+  function showYearPopup(id) {
+    removePopups(id);
+    const s = state[id];
+    const j = toJ(s.view);
+    const wrap = document.createElement('div');
+    wrap.className = 'year-popup';
+    for (let y = j.y - 6; y <= j.y + 5; y++) {
+      const div = document.createElement('div');
+      div.textContent = y;
+      div.addEventListener('click', (e) => {
+        e.stopPropagation();
+        s.view = fromJ(y, j.m, 1);
+        removePopups(id);
+        renderCalendar(id);
+      });
+      wrap.appendChild(div);
     }
-    closeheaderbtn.innerHTML=`<i class="ri-close-line"></i>`
+    calEls[id].appendChild(wrap);
+  }
 
+  // ---- Header (prev/next + clickable month/year) ----
+  function buildHeader(id) {
+    const s = state[id];
+    const j = toJ(s.view);
     const header = document.createElement('div');
-    header.classList.add('calendar-header');
+    header.className = 'calendar-header';
 
-    const prevBtn = document.createElement('button');
-    prevBtn.textContent = 'قبلی';
-    prevBtn.onclick = () => {
-      currentDate = currentDate.subtract('month', 1);
-      renderCalendar();
-    };
+    const prev = document.createElement('button');
+    prev.textContent = 'قبلی';
+    prev.addEventListener('click', (e) => {
+      e.stopPropagation();
+      s.view = fromJ(j.y, j.m - 1, 1);
+      renderCalendar(id);
+    });
 
-    const title = document.createElement('div');
-    title.innerHTML = `<span class="monthName">${start.format('MMMM')}</span> <span class="yearNumber">${year}</span>`;
+    const title = document.createElement('span');
+    title.innerHTML = `<span class="monthName">${monthNames[j.m - 1]}</span> <span class="yearNumber">${j.y}</span>`;
+    // month/year popups
+    title.querySelector('.monthName').addEventListener('click', (e) => { e.stopPropagation(); showMonthPopup(id); });
+    title.querySelector('.yearNumber').addEventListener('click', (e) => { e.stopPropagation(); showYearPopup(id); });
 
-    const nextBtn = document.createElement('button');
-    nextBtn.textContent = 'بعدی';
-    nextBtn.onclick = () => {
-      currentDate = currentDate.add('month', 1);
-      renderCalendar();
-    };
+    const next = document.createElement('button');
+    next.textContent = 'بعدی';
+    next.addEventListener('click', (e) => {
+      e.stopPropagation();
+      s.view = fromJ(j.y, j.m + 1, 1);
+      renderCalendar(id);
+    });
 
-    header.appendChild(prevBtn);
+    header.appendChild(prev);
     header.appendChild(title);
-    header.appendChild(nextBtn);
-    closeheader.appendChild(closeheaderbtn)
-    closeheaderbtn.addEventListener('click', () => {
-     calendarDiv.innerHTML = '';
-      calendarDiv.style.display = 'none'; 
-     });
+    header.appendChild(next);
+    return header;
+  }
 
-    calendarDiv.appendChild(closeheader)
-    calendarDiv.appendChild(header);
+  // ---- Table (future disabled; today disabled for start only; end >= start) ----
+  function buildTable(id) {
+    const s = state[id];
+    const j = toJ(s.view);
+    const first = fromJ(j.y, j.m, 1);
+    const daysInMonth = jalaali.jalaaliMonthLength(j.y, j.m);
 
     const table = document.createElement('table');
-    const daysRow = document.createElement('tr');
-    ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'].forEach(d => {
+    const thead = document.createElement('thead');
+    const trh = document.createElement('tr');
+    weekDays.forEach(d => {
       const th = document.createElement('th');
       th.textContent = d;
-      daysRow.appendChild(th);
+      trh.appendChild(th);
     });
-    table.appendChild(daysRow);
+    thead.appendChild(trh);
+    table.appendChild(thead);
 
-    let row = document.createElement('tr');
-    for (let i = 0; i < (startDay === 7 ? 0 : startDay); i++) {
-      row.appendChild(document.createElement('td'));
-    }
+    const tbody = document.createElement('tbody');
+
+    // شنبه = 0
+    let offset = (first.getDay() + 1) % 7;
+    let curRow = document.createElement('tr');
+    for (let i = 0; i < offset; i++) curRow.appendChild(document.createElement('td'));
+
+    const today = new Date();
 
     for (let d = 1; d <= daysInMonth; d++) {
-      const date = new persianDate([year, month, d]);
-      const td = document.createElement('td');
-      td.textContent = d;
+      const cell = document.createElement('td');
+      const cellDate = fromJ(j.y, j.m, d);
+      cell.textContent = d;
 
-     if (date.format('YYYYMMDD') === today.format('YYYYMMDD')) {
-       td.classList.add('today');
-        if (buttonId == 1) {
-         td.classList.add('disabled');
-        } else {
-          td.addEventListener('click', () => {
-          selectedDates[buttonId] = date;
-          document.getElementById('displayDate' + buttonId).textContent = date.format('YYYY/MM/DD');
-          calendarDiv.style.display = 'none';
-           });
-        }
-     } else if (date.unix() > today.unix()) {
-        td.classList.add('disabled');
-       } else {
-         td.addEventListener('click', () => {
-          selectedDates[buttonId] = date;
-         document.getElementById('displayDate' + buttonId).textContent = date.format('YYYY/MM/DD');
-          calendarDiv.style.display = 'none';
-         });
-        }
+      if (sameJ(cellDate, today)) cell.classList.add('today');
 
-      row.appendChild(td);
-      if (row.children.length === 7) {
-        table.appendChild(row);
-        row = document.createElement('tr');
+      const isFuture = cellDate > today;
+      const isToday = sameJ(cellDate, today);
+      const violatesStartEnd = (id === 2 && state[1].selected && cellDate < state[1].selected);
+
+      let clickable = true;
+      if (violatesStartEnd) clickable = false; // end must be >= start
+      if (isFuture) clickable = false;        // disable future dates
+      if (id === 1 && isToday) clickable = false; // today disabled for start
+
+      if (!clickable) {
+        cell.classList.add('disabled');
+      } else {
+        cell.addEventListener('click', (e) => {
+          e.stopPropagation();
+          s.selected = cellDate;
+          displayEls[id].textContent = formatJ(s.selected);
+          removePopups(id);
+          hideCalendar(id);
+        });
+      }
+
+      curRow.appendChild(cell);
+      if ((offset + d) % 7 === 0) {
+        tbody.appendChild(curRow);
+        curRow = document.createElement('tr');
       }
     }
 
-    if (row.children.length) table.appendChild(row);
-    calendarDiv.appendChild(table);
-
-    title.querySelector('.monthName').onclick = () => showMonthPopup(year);
-    title.querySelector('.yearNumber').onclick = () => showYearPopup(year);
-  }
-
-  function showMonthPopup(currentYear) {
-    const popup = document.createElement('div');
-    popup.classList.add('month-popup');
-
-    const monthNames = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
-    for (let i = 0; i < 12; i++) {
-      const div = document.createElement('div');
-      div.textContent = monthNames[i];
-      div.addEventListener('click', () => {
-        currentDate = new persianDate([currentYear, i + 1, 1]);
-        renderCalendar();
-      });
-      popup.appendChild(div);
+    if (curRow.children.length) {
+      while (curRow.children.length < 7) curRow.appendChild(document.createElement('td'));
+      tbody.appendChild(curRow);
     }
 
-    removePopups();
-    calendarDiv.appendChild(popup);
+    table.appendChild(tbody);
+    return table;
   }
 
-  function showYearPopup(currentYear) {
-    const popup = document.createElement('div');
-    popup.classList.add('year-popup');
+  function clearElement(el) { while (el.firstChild) el.removeChild(el.firstChild); }
 
-    for (let i = currentYear - 6; i <= currentYear + 5; i++) {
-      const div = document.createElement('div');
-      div.textContent = i;
-      div.addEventListener('click', () => {
-        currentDate = new persianDate([i, currentDate.month(), 1]);
-        renderCalendar();
-      });
-      popup.appendChild(div);
+  function renderCalendar(id) {
+    const container = calEls[id];
+    clearElement(container);
+
+    // close bar
+    const closeWrap = document.createElement('div');
+    closeWrap.className = 'calendar-close-header';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = id === 1 ? 'calendar-close-header-btn1' : 'calendar-close-header-btn2';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); hideCalendar(id); });
+    closeWrap.appendChild(closeBtn);
+    container.appendChild(closeWrap);
+
+    container.appendChild(buildHeader(id));
+    container.appendChild(buildTable(id));
+  }
+
+  function showCalendar(id) {
+    removePopups(id);
+    state[id].view = state[id].selected ? state[id].selected : new Date();
+    renderCalendar(id);
+    calEls[id].style.display = 'block';
+  }
+  function hideCalendar(id) {
+    removePopups(id);
+    calEls[id].style.display = 'none';
+  }
+
+  // ---- Launchers: only one calendar open at a time ----
+ document.querySelectorAll('.showCalendar').forEach(btn => {
+   btn.addEventListener('click', () => {
+    const id = Number(btn.getAttribute('data-id'));
+     const other = id === 1 ? 2 : 1;
+      hideCalendar(other);
+      showCalendar(id);
+   });
+ });
+
+  // ---- Close on outside click (but NOT on popups or launcher buttons) ----
+  document.addEventListener('click', (e) => {
+    const clickedInside =
+      [calEls[1], calEls[2]].some(el => el.contains(e.target)) ||
+      e.target.classList.contains('showCalendar') ||
+      e.target.closest('.month-popup') ||
+      e.target.closest('.year-popup');
+    if (!clickedInside) {
+      hideCalendar(1);
+      hideCalendar(2);
     }
-
-    removePopups();
-    calendarDiv.appendChild(popup);
-  }
-
-  function removePopups() {
-    calendarDiv.querySelectorAll('.month-popup, .year-popup').forEach(el => el.remove());
-  }
-  
-  renderCalendar();
-
-
-}
-
-document.querySelectorAll('.showCalendar').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const id = btn.dataset.id;
-    initCalendar(id);
   });
-});
 
-document.getElementById('showResultBtn').addEventListener('click', () => {
-  const d1 = selectedDates[1];
-  const d2 = selectedDates[2];
-  if (!d1 || !d2) return alert('لطفاً هر دو تاریخ را انتخاب کنید.');
-  if (d1.format('YYYYMMDD') === d2.format('YYYYMMDD')) return alert('تاریخ‌ها نباید یکسان باشند.');
-  if (d2.unix() < d1.unix()) return alert('تاریخ پایان نباید قبل از شروع باشد.');
+  // ---- Result & action buttons (parity with persianDate) ----
+  const resultBox = document.getElementById('resultBox');
+  const date1Text = document.getElementById('date1Text');
+  const date2Text = document.getElementById('date2Text');
 
-  document.getElementById('date1Text').textContent = 'تاریخ شروع: ' + d1.format('YYYY/MM/DD');
-  document.getElementById('date2Text').textContent = 'تاریخ پایان: ' + d2.format('YYYY/MM/DD');
-  document.getElementById('resultBox').style.display = 'block';
-});
+  document.getElementById('showResultBtn').addEventListener('click', () => {
+    const d1 = state[1].selected;
+    const d2 = state[2].selected;
+    if (!d1 || !d2) return alert('لطفاً هر دو تاریخ را انتخاب کنید.');
+    if (sameJ(d1, d2)) return alert('تاریخ‌ها نباید یکسان باشند.');
+    if (d2 < d1) return alert('تاریخ پایان نباید قبل از شروع باشد.');
 
-document.getElementById('refreshBtn').addEventListener('click', () => {
-  selectedDates = {1: null, 2: null};
-  document.getElementById('displayDate1').textContent = '';
-  document.getElementById('displayDate2').textContent = '';
-  document.getElementById('resultBox').style.display = 'none';
-});
+    date1Text.textContent = `تاریخ شروع: ${formatJ(d1)}`;
+    date2Text.textContent = `تاریخ پایان: ${formatJ(d2)}`;
+    resultBox.style.display = 'block';
+  });
 
-document.getElementById('send').addEventListener('click', () => {
-  selectedDates = {1: null, 2: null};
-  document.getElementById('displayDate1').textContent = '';
-  document.getElementById('displayDate2').textContent = '';
-  document.getElementById('resultBox').style.display = 'none';
-});
+  document.getElementById('refreshBtn').addEventListener('click', () => {
+    state[1].selected = null; state[2].selected = null;
+    displayEls[1].textContent = ''; displayEls[2].textContent = '';
+    resultBox.style.display = 'none';
+    hideCalendar(1); hideCalendar(2);
+  });
 
-document.getElementById('removeselectdata').addEventListener('click', () => {
-  document.getElementById('displayDate1').textContent = '';
-  document.getElementById('displayDate2').textContent = '';
-  selectedDates={}
-  
-});
+  document.getElementById('send').addEventListener('click', () => {
+    state[1].selected = null; state[2].selected = null;
+    displayEls[1].textContent = ''; displayEls[2].textContent = '';
+    resultBox.style.display = 'none';
+    hideCalendar(1); hideCalendar(2);
+  });
+
+  document.getElementById('removeselectdata').addEventListener('click', () => {
+    state[1].selected = null; state[2].selected = null;
+    displayEls[1].textContent = ''; displayEls[2].textContent = '';
+    resultBox.style.display = 'none';
+    // اگر یکی از تقویم‌ها باز بود، با وضعیت جدید رندرش کن
+    if (calEls[1].style.display === 'block') renderCalendar(1);
+    if (calEls[2].style.display === 'block') renderCalendar(2);
+  });
+})();
